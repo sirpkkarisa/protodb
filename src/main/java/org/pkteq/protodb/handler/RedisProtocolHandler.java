@@ -25,8 +25,6 @@ public class RedisProtocolHandler extends ChannelInboundHandlerAdapter {
                 List<?> args = cmdList.subList(1, cmdList.size());
                 RedisCmd redisCmd = new RedisCmd(name, args);
 
-//                    System.out.println("Netty Executing: " + redisCmd);
-
                 String result = Eval.eval(redisCmd);
                 ctx.writeAndFlush(Unpooled.copiedBuffer(result.getBytes()));
             }

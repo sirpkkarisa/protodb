@@ -3,6 +3,8 @@ package org.pkteq.protodb.core;
 import org.pkteq.protodb.AsyncTcpServer;
 
 import java.util.List;
+
+import static org.pkteq.protodb.core.Resp.encodeInteger;
 import static org.pkteq.protodb.core.Resp.encodeString;
 
 public class Eval {
@@ -15,9 +17,45 @@ public class Eval {
             case "SET" -> evalSET(redisCmd.args());
             case "GET" -> evalGET(redisCmd.args());
             case "TTL" -> evalTTL(redisCmd.args());
+            case "DEL" -> evalDEL(redisCmd.args());
+            case "EXPIRE" -> evalEXPIRE(redisCmd.args());
             case "COMMAND" -> encodeString("OK", true);
-            default -> evalPING(redisCmd.args());
+            default -> RESP_NIL;
         };
+    }
+
+    private static String evalEXPIRE(List<?> args) {
+
+        if (args.size() <= 1) {
+            return "- ERR wrong number of arguments for 'expire' command";
+        }
+
+        String key = (String) args.getFirst();
+        long expireDurationSec = Long.parseLong((String) args.get(1));
+
+
+        Store.Obj obj = (Store.Obj) AsyncTcpServer.STORE.get(key);
+
+        if (obj == null) {
+            return encodeInteger(0);
+        }
+
+        long expiresAt = System.currentTimeMillis() + expireDurationSec * 1000;
+        AsyncTcpServer.STORE.put(key, new Store.Obj(obj.value(), expiresAt));
+
+        return encodeInteger(1);
+    }
+
+    private static String evalDEL(List<?> args) {
+        long keysDeletedCount = 0;
+
+        for (Object key: args) {
+            if (AsyncTcpServer.STORE.remove((String) key) != null) {
+                keysDeletedCount += 1;
+            }
+        }
+
+        return encodeInteger(keysDeletedCount);
     }
 
     private static String evalTTL(List<?> args) {
@@ -29,20 +67,20 @@ public class Eval {
         Store.Obj ob = (Store.Obj) AsyncTcpServer.STORE.get(key);
 
         if (ob == null) {
-            return RESP_EMPTY;
+            return encodeInteger(-2);
         }
 
         if (ob.expiresAt() == -1) {
-            return RESP_NIL;
+            return encodeInteger(-1);
         }
 
         long durationMs = ob.expiresAt() - System.currentTimeMillis();
 
         if (durationMs <= 0) {
-            return RESP_EMPTY;
+            return encodeInteger(-2);
         }
 
-        return encodeString(ob.expiresAt() / 1000, false);
+        return encodeInteger(durationMs / 1000);
     }
 
     private static String evalGET(List<?> args) {
@@ -59,9 +97,11 @@ public class Eval {
         }
 
         if (ob.expiresAt() != -1 && ob.expiresAt() <= System.currentTimeMillis()) {
+            AsyncTcpServer.STORE.remove(key);
             return RESP_NIL;
         }
 
+        System.out.println(AsyncTcpServer.STORE);
         return encodeString(ob.value(), false);
     }
 

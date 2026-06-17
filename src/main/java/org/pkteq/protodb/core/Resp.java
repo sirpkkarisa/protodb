@@ -46,18 +46,6 @@ public class Resp {
         return sb.toString();
     }
 
-//    public static String encodeCmd(Cmd cmd) {
-////        String[] elements = new String[cmd.args().length + 1];
-//
-//        elements[0] = cmd.cmd().toUpperCase();
-//        System.arraycopy(cmd.args(), 0, elements, 1, cmd.args().length);
-//        return encodeArray(elements);
-//    }
-
-    public static List<?> decodeString(String fmt) {
-        return null; // Deprecated or remove
-    }
-
     public static List<?> decodeStream(java.io.InputStream input) throws java.io.IOException {
         return (new Lexer(input)).generateTokens();
     }
