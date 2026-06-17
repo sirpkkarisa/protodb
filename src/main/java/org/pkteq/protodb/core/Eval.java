@@ -1,15 +1,12 @@
 package org.pkteq.protodb.core;
 
-import org.pkteq.protodb.AsyncTcpServer;
-
 import java.util.List;
-
 import static org.pkteq.protodb.core.Resp.encodeInteger;
 import static org.pkteq.protodb.core.Resp.encodeString;
 
 public class Eval {
     private static final String RESP_NIL = "$-1\r\n";
-    private static final String RESP_EMPTY = "$-2\r\n";
+
     public static String eval(RedisCmd redisCmd) {
         String cmd = redisCmd.cmd().toUpperCase();
         return switch (cmd) {
@@ -25,7 +22,6 @@ public class Eval {
     }
 
     private static String evalEXPIRE(List<?> args) {
-
         if (args.size() <= 1) {
             return "- ERR wrong number of arguments for 'expire' command";
         }
@@ -33,39 +29,34 @@ public class Eval {
         String key = (String) args.getFirst();
         long expireDurationSec = Long.parseLong((String) args.get(1));
 
-
-        Store.Obj obj = (Store.Obj) AsyncTcpServer.STORE.get(key);
-
+        Store.Obj obj = Store.get(key);
         if (obj == null) {
             return encodeInteger(0);
         }
 
-        long expiresAt = System.currentTimeMillis() + expireDurationSec * 1000;
-        AsyncTcpServer.STORE.put(key, new Store.Obj(obj.value(), expiresAt));
+        long expiresAt = System.currentTimeMillis() + (expireDurationSec * 1000);
+        Store.putRaw(key, new Store.Obj(obj.value(), expiresAt));
 
         return encodeInteger(1);
     }
 
     private static String evalDEL(List<?> args) {
         long keysDeletedCount = 0;
-
-        for (Object key: args) {
-            if (AsyncTcpServer.STORE.remove((String) key) != null) {
+        for (Object key : args) {
+            if (Store.delete((String) key)) {
                 keysDeletedCount += 1;
             }
         }
-
         return encodeInteger(keysDeletedCount);
     }
 
     private static String evalTTL(List<?> args) {
         if (args.size() != 1) {
-            return "- ERR wrong number of arguments for 'get' command\r\n";
+            return "- ERR wrong number of arguments for 'ttl' command\r\n";
         }
         String key = (String) args.getFirst();
 
-        Store.Obj ob = (Store.Obj) AsyncTcpServer.STORE.get(key);
-
+        Store.Obj ob = Store.get(key);
         if (ob == null) {
             return encodeInteger(-2);
         }
@@ -75,7 +66,6 @@ public class Eval {
         }
 
         long durationMs = ob.expiresAt() - System.currentTimeMillis();
-
         if (durationMs <= 0) {
             return encodeInteger(-2);
         }
@@ -89,24 +79,16 @@ public class Eval {
         }
 
         String key = (String) args.getFirst();
-
-        Store.Obj ob = (Store.Obj) AsyncTcpServer.STORE.get(key);
+        Store.Obj ob = Store.get(key); // Automatically handles lazy expiration
 
         if (ob == null) {
             return RESP_NIL;
         }
 
-        if (ob.expiresAt() != -1 && ob.expiresAt() <= System.currentTimeMillis()) {
-            AsyncTcpServer.STORE.remove(key);
-            return RESP_NIL;
-        }
-
-        System.out.println(AsyncTcpServer.STORE);
         return encodeString(ob.value(), false);
     }
 
     private static String evalSET(List<?> args) {
-
         if (args.size() <= 1) {
             return "- ERR wrong number of arguments for 'set' command\r\n";
         }
@@ -119,21 +101,18 @@ public class Eval {
             switch ((String) args.get(i)) {
                 case "EX", "ex":
                     i += 1;
-
                     if (i == args.size()) {
                         return "- ERR Syntax error";
                     }
-
-                    expireDurationMS = Long.parseLong(String.valueOf(args.get(i)));
-                    expireDurationMS = expireDurationMS * 1000L;
+                    expireDurationMS = Long.parseLong(String.valueOf(args.get(i))) * 1000L;
                     break;
                 default:
                     return "- ERR Syntax error";
             }
         }
 
-        AsyncTcpServer.STORE.put(key, Store.setExpiration(value, expireDurationMS));
-        return encodeString("OK",true);
+        Store.set(key, value, expireDurationMS);
+        return encodeString("OK", true);
     }
 
     public static String evalPING(List<?> args) {
