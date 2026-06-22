@@ -8,6 +8,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import org.pkteq.protodb.core.Store;
 import org.pkteq.protodb.handler.RedisProtocolHandler;
 
+import java.util.Date;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -18,11 +19,10 @@ public class AsyncTcpServer {
     static void main() throws Exception {
         IoHandlerFactory nioIoHandler = NioIoHandler.newFactory();
         EventLoopGroup bossGroup = new MultiThreadIoEventLoopGroup(1, nioIoHandler);
-        EventLoopGroup workerGroup = new MultiThreadIoEventLoopGroup(1, nioIoHandler);
 
         try {
             ServerBootstrap b = new ServerBootstrap();
-            b.group(bossGroup, workerGroup)
+            b.group(bossGroup)
              .channel(NioServerSocketChannel.class)
              .childHandler(new ChannelInitializer<SocketChannel>() {
                  @Override
@@ -34,14 +34,13 @@ public class AsyncTcpServer {
              .childOption(ChannelOption.SO_KEEPALIVE, true);
 
             // Schedule globally once. Runs every 100ms.
-            workerGroup.scheduleWithFixedDelay(AsyncTcpServer::deleteExpiredKeys, 100, 100, TimeUnit.MILLISECONDS);
+            bossGroup.scheduleWithFixedDelay(AsyncTcpServer::deleteExpiredKeys, 100, 100, TimeUnit.MILLISECONDS);
 
-            System.out.println("Netty Server starting on port " + PORT + "...");
+            System.out.println("ProtoDB Server starting on port " + PORT + "...");
             ChannelFuture f = b.bind(PORT).sync();
 
             f.channel().closeFuture().sync();
         } finally {
-            workerGroup.shutdownGracefully();
             bossGroup.shutdownGracefully();
         }
     }

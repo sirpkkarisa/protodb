@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class Store {
     private static final Map<String, Obj> DATA = new ConcurrentHashMap<>();
+    private static final long limit = 5;
 
     public record Obj(Object value, long expiresAt) {
         public boolean isExpired() {
@@ -18,7 +19,14 @@ public class Store {
         if (expireDurationMS != -1) {
             expiresAt = System.currentTimeMillis() + expireDurationMS;
         }
+
+        if (DATA.size() >= limit) {
+            evict();
+        }
+
         DATA.put(key, new Obj(value, expiresAt));
+
+        System.out.println("Total keys: "+DATA.size());
     }
 
     /**
@@ -62,5 +70,19 @@ public class Store {
      */
     public static void putRaw(String key, Obj obj) {
         DATA.put(key, obj);
+    }
+
+    public static void evictFirst() {
+        Iterator<Map.Entry<String, Obj>> entryIterator = entryIterator();
+
+        if (entryIterator.hasNext()) {
+                Map.Entry<String, Obj> v = entryIterator.next();
+                System.out.println("Evicted key: "+v.getKey());
+                entryIterator.remove();
+        }
+    }
+
+    public static void evict(){
+        evictFirst();
     }
 }
